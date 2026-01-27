@@ -1,4 +1,8 @@
 streamlit
-pandas
+gdown
 numpy
+pandas
+pypdf
+sentence-transformers
 scikit-learn
+torch
