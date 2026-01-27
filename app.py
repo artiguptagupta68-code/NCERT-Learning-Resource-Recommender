@@ -21,14 +21,22 @@ subjects_topics = {subject: [f"{subject} Topic {i+1}" for i in range(50)] for su
 # -----------------------------
 # Chapters / Resource content
 # -----------------------------
-resources = pd.DataFrame({
-    "resource_id": range(1, 51*len(subjects)+1),
-    "subject": [subject for subject in subjects for _ in range(50)],
-    "chapter": [f"{subject} Topic {i+1}" for subject in subjects for i in range(50)],
-    "class": [11 if i%2==0 else 12 for i in range(50*len(subjects))],
-    "difficulty": ["Beginner" if i%3==0 else "Intermediate" for i in range(50*len(subjects))],
-    "content": [f"{subject} content about topic {i+1}" for subject in subjects for i in range(50)]
-})
+resources_list = []
+
+resource_id = 1
+for subject in subjects:
+    for i in range(50):
+        resources_list.append({
+            "resource_id": resource_id,
+            "subject": subject,
+            "chapter": f"{subject} Topic {i+1}",
+            "class": 11 if i % 2 == 0 else 12,
+            "difficulty": "Beginner" if i % 3 == 0 else "Intermediate",
+            "content": f"{subject} content about topic {i+1}"
+        })
+        resource_id += 1
+
+resources = pd.DataFrame(resources_list)
 
 # -----------------------------
 # Student Learning History
