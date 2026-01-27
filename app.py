@@ -4,16 +4,6 @@ import streamlit as st
 # CONFIG
 # ----------------------------------
 st.set_page_config(page_title="Study Book Recommender", layout="wide")
-st.title("📚 Smart Study Book Recommender")
-
-st.write("Choose a subject, topic, and your level to get the **best books** to study.")
-
-import streamlit as st
-
-# ----------------------------------
-# CONFIG
-# ----------------------------------
-st.set_page_config(page_title="Study Book Recommender", layout="wide")
 st.title("📚 Smart Study Book & Video Recommender")
 
 
