@@ -75,23 +75,31 @@ def build_student_profile(student_id):
     history = student_data[student_data["student_id"] == student_id]
     
     if history.empty:
-        # No history: return a zero vector of the same shape as TF-IDF
+        # No history → return zero vector
         return np.zeros((1, tfidf_matrix.shape[1]))
     
-    # Get the resource indices (subtract 1 because resource_id starts from 1)
+    # Get valid indices
     indices = history["resource_id"].values - 1
-    
-    # Sometimes indices may not match the TF-IDF matrix; ensure they are valid
     valid_indices = [i for i in indices if 0 <= i < tfidf_matrix.shape[0]]
     
     if not valid_indices:
         return np.zeros((1, tfidf_matrix.shape[1]))
     
-    student_vector = np.asarray(
-        tfidf_matrix[valid_indices].mean(axis=0)
-    ).reshape(1, -1)
-
+    # Select rows from sparse matrix
+    selected_matrix = tfidf_matrix[valid_indices]
+    
+    # If selected_matrix has no rows, return zeros
+    if selected_matrix.shape[0] == 0:
+        return np.zeros((1, tfidf_matrix.shape[1]))
+    
+    # Compute mean safely
+    student_vector = selected_matrix.mean(axis=0)
+    
+    # Convert sparse matrix to dense numpy array
+    student_vector = np.asarray(student_vector).reshape(1, -1)
+    
     return student_vector
+r
 
 
 
