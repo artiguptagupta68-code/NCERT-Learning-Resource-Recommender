@@ -73,6 +73,11 @@ tfidf_matrix = vectorizer.fit_transform(resources["content"])
 # -----------------------------
 def build_student_profile(student_id):
     history = student_data[student_data["student_id"] == student_id]
+    
+    if history.empty:
+        # If no history, return a zero vector of the same size as TF-IDF
+        return np.zeros((1, tfidf_matrix.shape[1]))
+    
     indices = history["resource_id"].values - 1
 
     student_vector = np.asarray(
@@ -80,6 +85,7 @@ def build_student_profile(student_id):
     ).reshape(1, -1)
 
     return student_vector
+
 
 def recommend_resources(student_id, top_n=5):
     student_vector = build_student_profile(student_id)
