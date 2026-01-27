@@ -8,8 +8,17 @@ st.title("📚 Smart Study Book Recommender")
 
 st.write("Choose a subject, topic, and your level to get the **best books** to study.")
 
+import streamlit as st
+
 # ----------------------------------
-# DATA
+# CONFIG
+# ----------------------------------
+st.set_page_config(page_title="Study Book Recommender", layout="wide")
+st.title("📚 Smart Study Book & Video Recommender")
+
+
+# ----------------------------------
+# SUBJECTS & TOPICS
 # ----------------------------------
 
 subjects = {
@@ -41,41 +50,42 @@ subjects = {
 }
 
 # ----------------------------------
-# BOOK RECOMMENDATIONS
+# SUBJECT-LEVEL BOOK BANK (KEY FIX)
 # ----------------------------------
 
-book_recommendations = {
-    "Indian Constitution": {
+subject_books = {
+    "Polity": {
         "Beginner": [
             "NCERT Class 11 – Indian Constitution at Work",
-            "M. Laxmikanth (Basic Reading)"
+            "NCERT Class 12 – Contemporary World Politics",
+            "M. Laxmikanth (Selective Reading)"
         ],
         "Intermediate": [
             "M. Laxmikanth – Indian Polity",
             "Subhash Kashyap – Constitution of India"
         ],
         "Advanced": [
-            "D. D. Basu – Introduction to the Constitution of India",
+            "D. D. Basu – Constitution of India",
             "Granville Austin – Indian Constitution"
         ]
     },
 
-    "Demand and Supply": {
+    "Economics": {
         "Beginner": [
             "NCERT Class 11 – Microeconomics",
-            "S. Chand – Basic Economics"
+            "NCERT Class 12 – Macroeconomics"
         ],
         "Intermediate": [
-            "HL Ahuja – Microeconomics",
+            "HL Ahuja – Micro & Macro Economics",
             "Paul Samuelson – Economics"
         ],
         "Advanced": [
             "Varian – Intermediate Microeconomics",
-            "Nicholson – Microeconomic Theory"
+            "Dornbusch & Fischer – Macroeconomics"
         ]
     },
 
-    "Human Behaviour": {
+    "Psychology": {
         "Beginner": [
             "NCERT Class 11 – Psychology",
             "Morgan & King – Introduction to Psychology"
@@ -85,30 +95,66 @@ book_recommendations = {
             "Ciccarelli – Psychology"
         ],
         "Advanced": [
-            "Goldstein – Sensation and Perception",
-            "DSM-5 Reference Text"
+            "DSM-5 Reference Text",
+            "Goldstein – Sensation and Perception"
+        ]
+    },
+
+    "Sociology": {
+        "Beginner": [
+            "NCERT Class 11 – Sociology",
+            "NCERT Class 12 – Sociology"
+        ],
+        "Intermediate": [
+            "Haralambos – Sociology",
+            "Anthony Giddens – Sociology"
+        ],
+        "Advanced": [
+            "Ritzer – Sociological Theory",
+            "Bottomore – Sociology"
+        ]
+    },
+
+    "Business Studies": {
+        "Beginner": [
+            "NCERT Class 11 – Business Studies",
+            "NCERT Class 12 – Business Studies"
+        ],
+        "Intermediate": [
+            "P. C. Tulsian – Business Studies",
+            "Koontz – Management"
+        ],
+        "Advanced": [
+            "Robbins – Organizational Behaviour",
+            "Kotler – Marketing Management"
         ]
     }
 }
 
 # ----------------------------------
-# VIDEO LINKS
+# VIDEO BANK (SUBJECT-LEVEL)
 # ----------------------------------
 
-video_links = {
-    "Indian Constitution": [
-        {
-            "title": "Indian Constitution Explained",
-            "thumbnail": "https://img.youtube.com/vi/4H2z2z3qZyA/0.jpg",
-            "url": "https://www.youtube.com/watch?v=4H2z2z3qZyA"
-        }
+subject_videos = {
+    "Polity": [
+        ("Indian Polity by Laxmikanth", "https://www.youtube.com/watch?v=4H2z2z3qZyA"),
+        ("Unacademy Polity Series", "https://www.youtube.com/watch?v=YQyZKzZKJpU")
     ],
-    "Demand and Supply": [
-        {
-            "title": "Demand & Supply Basics",
-            "thumbnail": "https://img.youtube.com/vi/k2Yv6V2kYhU/0.jpg",
-            "url": "https://www.youtube.com/watch?v=k2Yv6V2kYhU"
-        }
+    "Economics": [
+        ("Demand & Supply Basics", "https://www.youtube.com/watch?v=k2Yv6V2kYhU"),
+        ("Macro Economics Explained", "https://www.youtube.com/watch?v=3ez10ADR_gM")
+    ],
+    "Psychology": [
+        ("Human Behaviour Explained", "https://www.youtube.com/watch?v=vo4pMVb0R6M"),
+        ("Learning & Motivation", "https://www.youtube.com/watch?v=9Xn6nYz8z0k")
+    ],
+    "Sociology": [
+        ("Indian Society Explained", "https://www.youtube.com/watch?v=G8qY0WcYjK4"),
+        ("Social Change & Stratification", "https://www.youtube.com/watch?v=YcN3rTj6mXk")
+    ],
+    "Business Studies": [
+        ("Principles of Management", "https://www.youtube.com/watch?v=2C5WmC6p2Wk"),
+        ("Marketing Basics", "https://www.youtube.com/watch?v=KX8N3Yp0F9I")
     ]
 }
 
@@ -117,41 +163,24 @@ video_links = {
 # ----------------------------------
 
 subject = st.selectbox("📘 Select Subject", list(subjects.keys()))
-
-topic = st.selectbox(
-    "📌 Select Topic",
-    subjects[subject]
-)
-
-level = st.radio(
-    "🎯 Select Your Level",
-    ["Beginner", "Intermediate", "Advanced"]
-)
+topic = st.selectbox("📌 Select Topic", subjects[subject])
+level = st.radio("🎯 Select Level", ["Beginner", "Intermediate", "Advanced"])
 
 # ----------------------------------
 # OUTPUT
 # ----------------------------------
 
-if st.button("📖 Recommend Books"):
+if st.button("📖 Recommend Study Resources"):
     st.subheader("📚 Recommended Books")
 
-    books = book_recommendations.get(topic, {}).get(level, [])
+    books = subject_books[subject][level]
 
-    if not books:
-        st.warning("No books available yet for this topic and level.")
-    else:
-        for b in books:
-            st.write(f"• {b}")
+    for b in books:
+        st.write(f"• {b}")
 
     st.subheader("🎥 Recommended Videos")
 
-    videos = video_links.get(topic, [])
-
-    if not videos:
-        st.info("No videos available for this topic yet.")
-    else:
-        cols = st.columns(len(videos))
-        for col, v in zip(cols, videos):
-            with col:
-                st.image(v["thumbnail"])
-                st.markdown(f"[▶ {v['title']}]({v['url']})")
+    cols = st.columns(2)
+    for i, (title, link) in enumerate(subject_videos[subject]):
+        with cols[i % 2]:
+            st.markdown(f"▶ **[{title}]({link})**")
