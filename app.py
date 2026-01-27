@@ -78,50 +78,44 @@ tfidf_matrix = vectorizer.fit_transform(resources["content"])
 # Function: Build Student Profile
 # -----------------------------
 def build_student_profile(student_id):
-    """
-    Create a vector representation of a student based on chapters they studied.
-    If no history, return a zero vector.
-    """
     history = student_data[student_data["student_id"] == student_id]
     
     if history.empty:
-        # New student → return zero vector
-        return np.zeros((1, tfidf_matrix.shape[1]))
+        # New student → return None to handle separately
+        return None
     
-    # Get the indices of resources studied (adjust for 0-based indexing)
     indices = history["resource_id"].values - 1
     valid_indices = [i for i in indices if 0 <= i < tfidf_matrix.shape[0]]
-    
     if not valid_indices:
-        return np.zeros((1, tfidf_matrix.shape[1]))
+        return None
     
-    # Select corresponding rows from TF-IDF matrix
     selected_matrix = tfidf_matrix[valid_indices]
-    
-    # Compute mean vector
     student_vector = selected_matrix.mean(axis=0)
     student_vector = np.asarray(student_vector).reshape(1, -1)
-    
     return student_vector
+
 
 # -----------------------------
 # Function: Recommend Chapters
 # -----------------------------
 def recommend_resources(student_id, top_n=5):
-    """
-    Recommend chapters most similar to the student's profile.
-    Excludes chapters already studied.
-    """
     student_vector = build_student_profile(student_id)
+    
+    if student_vector is None:
+        # New student → recommend top beginner chapters
+        recs = resources[resources["difficulty"] == "Beginner"].head(top_n).copy()
+        recs["similarity_score"] = np.nan
+        return recs
+    
     similarity = cosine_similarity(student_vector, tfidf_matrix).flatten()
-
     recs = resources.copy()
     recs["similarity_score"] = similarity
 
     studied = student_data[student_data["student_id"] == student_id]["resource_id"]
     recs = recs[~recs["resource_id"].isin(studied)]
-
+    
     return recs.sort_values("similarity_score", ascending=False).head(top_n)
+
 
 # -----------------------------
 # Function: Adaptive Recommendation
