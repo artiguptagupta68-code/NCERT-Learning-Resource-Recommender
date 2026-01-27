@@ -75,16 +75,24 @@ def build_student_profile(student_id):
     history = student_data[student_data["student_id"] == student_id]
     
     if history.empty:
-        # If no history, return a zero vector of the same size as TF-IDF
+        # No history: return a zero vector of the same shape as TF-IDF
         return np.zeros((1, tfidf_matrix.shape[1]))
     
+    # Get the resource indices (subtract 1 because resource_id starts from 1)
     indices = history["resource_id"].values - 1
-
+    
+    # Sometimes indices may not match the TF-IDF matrix; ensure they are valid
+    valid_indices = [i for i in indices if 0 <= i < tfidf_matrix.shape[0]]
+    
+    if not valid_indices:
+        return np.zeros((1, tfidf_matrix.shape[1]))
+    
     student_vector = np.asarray(
-        tfidf_matrix[indices].mean(axis=0)
+        tfidf_matrix[valid_indices].mean(axis=0)
     ).reshape(1, -1)
 
     return student_vector
+
 
 
 def recommend_resources(student_id, top_n=5):
