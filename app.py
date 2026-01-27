@@ -1,3 +1,4 @@
+
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -56,10 +57,10 @@ resources = pd.DataFrame({
 })
 
 student_data = pd.DataFrame({
-    "student_id": [2001, 2001, 2001],
-    "resource_id": [1, 3, 7],
-    "rating": [5, 4, 5],
-    "progress_percent": [85, 70, 60]
+    "student_id": [2001, 2001, 2001, 2002, 2002],
+    "resource_id": [1, 3, 7, 2, 4],
+    "rating": [5, 4, 5, 3, 4],
+    "progress_percent": [85, 70, 60, 50, 65]
 })
 
 # -----------------------------
@@ -85,22 +86,15 @@ def build_student_profile(student_id):
     if not valid_indices:
         return np.zeros((1, tfidf_matrix.shape[1]))
     
-    # Select rows from sparse matrix
     selected_matrix = tfidf_matrix[valid_indices]
     
-    # If selected_matrix has no rows, return zeros
     if selected_matrix.shape[0] == 0:
         return np.zeros((1, tfidf_matrix.shape[1]))
     
-    # Compute mean safely
     student_vector = selected_matrix.mean(axis=0)
-    
-    # Convert sparse matrix to dense numpy array
     student_vector = np.asarray(student_vector).reshape(1, -1)
     
     return student_vector
-
-
 
 def recommend_resources(student_id, top_n=5):
     student_vector = build_student_profile(student_id)
@@ -115,15 +109,18 @@ def recommend_resources(student_id, top_n=5):
     return recs.sort_values("similarity_score", ascending=False).head(top_n)
 
 def adaptive_recommendation(student_id):
-    avg_progress = student_data[student_data["student_id"] == student_id]["progress_percent"].mean()
+    history = student_data[student_data["student_id"] == student_id]
+    avg_progress = history["progress_percent"].mean() if not history.empty else 0
 
-    if avg_progress >= 80:
-        level = "Intermediate"
-    else:
-        level = "Beginner"
+    level = "Intermediate" if avg_progress >= 80 else "Beginner"
 
     recs = recommend_resources(student_id)
-    return recs[recs["difficulty"] == level]
+    
+    # If no resources match difficulty, return top recommendations anyway
+    filtered_recs = recs[recs["difficulty"] == level]
+    if filtered_recs.empty:
+        return recs
+    return filtered_recs
 
 # -----------------------------
 # Streamlit UI
@@ -133,14 +130,16 @@ st.sidebar.header("🎓 Student Settings")
 student_id = st.sidebar.number_input("Student ID", value=2001)
 show_data = st.sidebar.checkbox("Show Student History")
 
+# Filter student history
+filtered_history = student_data[student_data["student_id"] == student_id]
 if show_data:
     st.subheader("📈 Student Learning History")
-    filtered_history = student_data[student_data["student_id"] == student_id]
-    st.dataframe(filtered_history)
-
+    if filtered_history.empty:
+        st.warning(f"No learning history found for Student ID {student_id}.")
+    else:
+        st.dataframe(filtered_history)
 
 st.subheader("📚 Recommended Chapters")
-
 if st.button("Generate Recommendations"):
     final_recs = adaptive_recommendation(student_id)
 
