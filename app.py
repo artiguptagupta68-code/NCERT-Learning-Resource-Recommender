@@ -1,7 +1,8 @@
 import os
-from pathlib import Path
-import zipfile
 import re
+import zipfile
+import urllib.parse
+from pathlib import Path
 
 import streamlit as st
 import gdown
@@ -10,32 +11,39 @@ from pypdf import PdfReader
 from sentence_transformers import SentenceTransformer
 from sklearn.metrics.pairwise import cosine_similarity
 
-# -----------------------------
+# --------------------------------------------------
 # CONFIG
-# -----------------------------
+# --------------------------------------------------
 FILE_ID = "1GoY0DZj1KLdC0Xvur0tQlvW_993biwcZ"
 ZIP_PATH = "ncert.zip"
 EXTRACT_DIR = "ncert_extracted"
 
 SUBJECTS = ["Polity", "Economics", "Sociology", "Psychology", "Business Studies"]
+LEVELS = ["Beginner", "Intermediate", "Advanced"]
 
-# -----------------------------
+# --------------------------------------------------
 # STREAMLIT SETUP
-# -----------------------------
+# --------------------------------------------------
 st.set_page_config(page_title="NCERT Learning Assistant", layout="wide")
 st.title("📘 NCERT Learning Assistant")
-st.write("Select topics to get chapter, book, and video recommendations for Class 11–12 students")
+st.caption("Topic → Chapter → Book → Video recommendations")
 
-# -----------------------------
+# --------------------------------------------------
 # DOWNLOAD & EXTRACT NCERT PDFs
-# -----------------------------
+# --------------------------------------------------
 def download_and_extract():
     if not os.path.exists(ZIP_PATH):
-        gdown.download(f"https://drive.google.com/uc?id={FILE_ID}", ZIP_PATH, quiet=False)
+        gdown.download(
+            f"https://drive.google.com/uc?id={FILE_ID}",
+            ZIP_PATH,
+            quiet=False,
+        )
+
     os.makedirs(EXTRACT_DIR, exist_ok=True)
+
     with zipfile.ZipFile(ZIP_PATH, "r") as z:
         z.extractall(EXTRACT_DIR)
-    # extract nested zips
+
     for zfile in Path(EXTRACT_DIR).rglob("*.zip"):
         try:
             target = zfile.parent / zfile.stem
@@ -45,156 +53,204 @@ def download_and_extract():
         except:
             pass
 
+
 download_and_extract()
 
-# -----------------------------
-# PDF Utilities
-# -----------------------------
+# --------------------------------------------------
+# PDF UTILITIES
+# --------------------------------------------------
 def read_pdf(path):
     try:
         reader = PdfReader(path)
-        return " ".join(p.extract_text() or "" for p in reader.pages)
+        return " ".join(page.extract_text() or "" for page in reader.pages)
     except:
         return ""
 
+
 def clean_text(text):
-    text = re.sub(r"(activity|let us|exercise|project|editor|reprint|copyright|isbn).*", " ", text, flags=re.I)
+    text = re.sub(
+        r"(activity|exercise|project|copyright|isbn).*",
+        " ",
+        text,
+        flags=re.I,
+    )
     return re.sub(r"\s+", " ", text).strip()
 
+
+@st.cache_data
 def load_all_texts():
-    texts = []
-    paths = []
+    texts, paths = [], []
     for pdf in Path(EXTRACT_DIR).rglob("*.pdf"):
-        t = clean_text(read_pdf(str(pdf)))
-        if len(t.split()) > 50:
-            texts.append(t)
-            paths.append(pdf)
+        txt = clean_text(read_pdf(str(pdf)))
+        if len(txt.split()) > 100:
+            texts.append(txt)
+            paths.append(pdf.name)
     return texts, paths
 
-# -----------------------------
-# EXTRACT TOPICS
-# -----------------------------
+
+# --------------------------------------------------
+# TOPIC EXTRACTION
+# --------------------------------------------------
 def extract_topics_from_text(text):
-    lines = text.split("\n")
+    sentences = re.split(r"[.\n]", text)
     topics = []
-    for line in lines:
-        line = line.strip()
-        if 3 <= len(line.split()) <= 8 and line[0].isupper():
-            line = re.sub(r"^(chapter\s*\d+:?|[\d.]+\s*)", "", line, flags=re.I)
-            topics.append(line.strip())
+
+    for s in sentences:
+        s = s.strip()
+        if 2 <= len(s.split()) <= 6:
+            if not any(x in s.lower() for x in ["isbn", "copyright", "exercise"]):
+                topics.append(s.title())
+
     return list(set(topics))
+
 
 @st.cache_data
 def get_all_topics():
     texts, _ = load_all_texts()
     all_topics = []
-    for text in texts:
-        all_topics.extend(extract_topics_from_text(text))
-    return sorted(list(set(all_topics)))
+    for t in texts:
+        all_topics.extend(extract_topics_from_text(t))
+    return sorted(set(all_topics))
+
 
 all_topics = get_all_topics()
 
-# -----------------------------
-# Sentence Transformer
-# -----------------------------
+# --------------------------------------------------
+# EMBEDDING MODEL
+# --------------------------------------------------
 @st.cache_resource
 def load_embedder():
     return SentenceTransformer("all-MiniLM-L6-v2")
 
+
 embedder = load_embedder()
 
-# -----------------------------
-# Books & Videos
-# -----------------------------
+# --------------------------------------------------
+# BOOKS & VIDEOS
+# --------------------------------------------------
 books = {
-    "Sociology": {
-        "Beginner": ["NCERT Sociology Class 11", "Understanding Society by Haralambos (Intro)"],
-        "Intermediate": ["Introduction to Sociology by Bottomore", "Sociology: Themes and Perspectives by Haralambos"],
-        "Advanced": ["Advanced Sociology by Giddens", "Sociology: Concepts and Theories by Macionis"]
+    "Economics": {
+        "Beginner": ["NCERT Economics Class 11", "Basic Economics – Mankiw"],
+        "Intermediate": ["Principles of Economics – Mankiw"],
+        "Advanced": ["Advanced Economic Theory – H L Ahuja"],
     },
     "Polity": {
-        "Beginner": ["NCERT Political Science Class 11", "Indian Constitution Made Easy"],
-        "Intermediate": ["Indian Polity by M. Laxmikanth", "Governance in India by D.D. Basu"],
-        "Advanced": ["Introduction to the Constitution of India by D.D. Basu", "Indian Constitutional Law Advanced"]
+        "Beginner": ["NCERT Political Science Class 11"],
+        "Intermediate": ["Indian Polity – M. Laxmikanth"],
+        "Advanced": ["Constitution of India – D D Basu"],
+    },
+    "Sociology": {
+        "Beginner": ["NCERT Sociology Class 11"],
+        "Intermediate": ["Sociology – Haralambos"],
+        "Advanced": ["Sociology – Anthony Giddens"],
     },
     "Psychology": {
-        "Beginner": ["NCERT Psychology Class 11", "Psychology Basics Intro"],
-        "Intermediate": ["Psychology: An Exploration by Saundra K. Ciccarelli", "Understanding Psychology by Feldman"],
-        "Advanced": ["Advanced Psychology by Baron & Misra", "Handbook of Psychology by Weiner"]
-    },
-    "Economics": {
-        "Beginner": ["NCERT Economics Class 11", "Principles of Economics Intro by Mankiw"],
-        "Intermediate": ["Principles of Economics by N. Gregory Mankiw", "Economic Theory by Samuelson"],
-        "Advanced": ["Advanced Economic Theory by H.L. Ahuja", "Micro and Macro Economics Advanced"]
+        "Beginner": ["NCERT Psychology Class 11"],
+        "Intermediate": ["Understanding Psychology – Feldman"],
+        "Advanced": ["Handbook of Psychology"],
     },
     "Business Studies": {
-        "Beginner": ["NCERT Business Studies Class 11", "Introduction to Management Basics"],
-        "Intermediate": ["Business Studies by Poonam Gandhi", "Business Management Concepts"],
-        "Advanced": ["Advanced Business Management by Robbins", "Strategic Management Advanced"]
-    }
+        "Beginner": ["NCERT Business Studies Class 11"],
+        "Intermediate": ["Business Studies – Poonam Gandhi"],
+        "Advanced": ["Strategic Management – Robbins"],
+    },
 }
 
 videos = {
-    subject: {
-        level: [f"https://www.youtube.com/watch?v={subject}_{level}_{i+1}" for i in range(3)]
-        for level in ["Beginner", "Intermediate", "Advanced"]
-    } for subject in SUBJECTS
+    "Economics": {
+        "Beginner": ["https://www.youtube.com/watch?v=3ez10ADR_gM"],
+        "Intermediate": ["https://www.youtube.com/watch?v=9M0xQ2uN8Fk"],
+        "Advanced": ["https://www.youtube.com/watch?v=H5oZ4wN9bEY"],
+    },
+    "Polity": {
+        "Beginner": ["https://www.youtube.com/watch?v=Y2nZ6C3V0ks"],
+        "Intermediate": ["https://www.youtube.com/watch?v=KkMZP9Q8vYQ"],
+        "Advanced": ["https://www.youtube.com/watch?v=bL5G8K0qZ8s"],
+    },
 }
 
-# -----------------------------
-# Streamlit UI
-# -----------------------------
-st.sidebar.header("🎓 Select Options")
-selected_subject = st.sidebar.selectbox("Select Subject", SUBJECTS)
-selected_level = st.sidebar.selectbox("Select Level", ["Beginner", "Intermediate", "Advanced"])
-selected_topics = st.sidebar.multiselect("Select Topic(s)", all_topics)
+# --------------------------------------------------
+# VIDEO THUMBNAILS
+# --------------------------------------------------
+def get_youtube_id(url):
+    parsed = urllib.parse.urlparse(url)
+    if parsed.hostname in ("www.youtube.com", "youtube.com"):
+        return urllib.parse.parse_qs(parsed.query).get("v", [None])[0]
+    elif parsed.hostname == "youtu.be":
+        return parsed.path.lstrip("/")
+    return None
 
-# -----------------------------
-# Recommend chapters using embeddings
-# -----------------------------
-@st.cache_data
-def get_chapter_recommendations(topics, top_n=5):
+
+def show_video_thumbnails(video_urls, cols=3):
+    if not video_urls:
+        st.info("No videos available.")
+        return
+
+    columns = st.columns(cols)
+    for i, url in enumerate(video_urls):
+        vid = get_youtube_id(url)
+        if not vid:
+            continue
+
+        thumb = f"https://img.youtube.com/vi/{vid}/0.jpg"
+        with columns[i % cols]:
+            st.markdown(
+                f"""
+                <a href="{url}" target="_blank">
+                    <img src="{thumb}" style="width:100%; border-radius:10px;">
+                </a>
+                """,
+                unsafe_allow_html=True,
+            )
+
+# --------------------------------------------------
+# SIDEBAR UI
+# --------------------------------------------------
+st.sidebar.header("🎓 Learning Preferences")
+
+subject = st.sidebar.selectbox("Subject", SUBJECTS)
+level = st.sidebar.selectbox("Level", LEVELS)
+
+if all_topics:
+    topics = st.sidebar.multiselect("Select Topics", all_topics)
+else:
+    topics = []
+
+# --------------------------------------------------
+# CHAPTER RECOMMENDATION
+# --------------------------------------------------
+def recommend_chapters(topics, top_n=5):
     if not topics:
-        return pd.DataFrame({"Message":["Please select topics"]})
-    
+        return pd.DataFrame()
+
     texts, paths = load_all_texts()
-    text_embeddings = embedder.encode(texts, convert_to_tensor=True)
-    topic_embedding = embedder.encode([" ".join(topics)], convert_to_tensor=True)
-    
-    sims = cosine_similarity(topic_embedding.cpu().numpy(), text_embeddings.cpu().numpy()).flatten()
-    
-    top_idx = sims.argsort()[-top_n:][::-1]
-    results = []
-    for i in top_idx:
-        results.append({
-            "Chapter PDF": str(paths[i].name),
-            "Similarity Score": sims[i]
-        })
-    return pd.DataFrame(results)
+    text_emb = embedder.encode(texts)
+    topic_emb = embedder.encode([" ".join(topics)])
 
-# -----------------------------
-# Recommend books & videos
-# -----------------------------
-def recommend_materials(subject, level, topics):
-    if not topics:
-        return pd.DataFrame({"Message":["Please select at least one topic"]})
-    recommended_books = books.get(subject, {}).get(level, [])
-    recommended_videos = videos.get(subject, {}).get(level, [])
+    sims = cosine_similarity(topic_emb, text_emb)[0]
+    top_idx = sims.argsort()[-top_n:][::-1]
+
     return pd.DataFrame({
-        "Topics": [", ".join(topics)],
-        "Recommended Books": [", ".join(recommended_books)],
-        "Recommended Videos": [", ".join(recommended_videos)]
+        "Chapter PDF": [paths[i] for i in top_idx],
+        "Similarity": [round(float(sims[i]), 3) for i in top_idx],
     })
 
-# -----------------------------
-# Display recommendations
-# -----------------------------
-st.subheader("📚 Chapter Recommendations")
-if st.button("Get Chapter Recommendations"):
-    chapter_recs = get_chapter_recommendations(selected_topics)
-    st.dataframe(chapter_recs)
 
-st.subheader("📖 Book & Video Recommendations")
-if st.button("Get Books & Videos"):
-    materials = recommend_materials(selected_subject, selected_level, selected_topics)
-    st.dataframe(materials)
+# --------------------------------------------------
+# OUTPUT
+# --------------------------------------------------
+st.subheader("📚 Recommended Chapters")
+
+if st.button("Generate Recommendations"):
+    chapter_df = recommend_chapters(topics)
+    if chapter_df.empty:
+        st.warning("Please select at least one topic.")
+    else:
+        st.dataframe(chapter_df)
+
+    st.subheader("📖 Recommended Books")
+    for b in books.get(subject, {}).get(level, []):
+        st.write("📘", b)
+
+    st.subheader("🎥 Recommended Videos")
+    show_video_thumbnails(videos.get(subject, {}).get(level, []))
