@@ -1,17 +1,19 @@
-
+%%writefile app.py
 import streamlit as st
 import pandas as pd
 import numpy as np
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 
+# -----------------------------
+# Streamlit page setup
+# -----------------------------
 st.set_page_config(page_title="NCERT Learning Recommender", layout="wide")
-
 st.title("📘 NCERT Learning Resource Recommender")
-st.write("Personalized recommendations for Class 11–12 students")
+st.write("Personalized chapter recommendations for Class 11–12 students")
 
 # -----------------------------
-# Dataset
+# Dataset: Chapters/Resources
 # -----------------------------
 resources = pd.DataFrame({
     "resource_id": [1,2,3,4,5,6,7,8,9,10],
@@ -56,6 +58,9 @@ resources = pd.DataFrame({
     ]
 })
 
+# -----------------------------
+# Dataset: Student Learning History
+# -----------------------------
 student_data = pd.DataFrame({
     "student_id": [2001, 2001, 2001, 2002, 2002],
     "resource_id": [1, 3, 7, 2, 4],
@@ -64,39 +69,49 @@ student_data = pd.DataFrame({
 })
 
 # -----------------------------
-# NLP Vectorization
+# NLP: Convert chapter content into vectors
 # -----------------------------
 vectorizer = TfidfVectorizer(stop_words="english")
 tfidf_matrix = vectorizer.fit_transform(resources["content"])
 
 # -----------------------------
-# Functions
+# Function: Build Student Profile
 # -----------------------------
 def build_student_profile(student_id):
+    """
+    Create a vector representation of a student based on chapters they studied.
+    If no history, return a zero vector.
+    """
     history = student_data[student_data["student_id"] == student_id]
     
     if history.empty:
-        # No history → return zero vector
+        # New student → return zero vector
         return np.zeros((1, tfidf_matrix.shape[1]))
     
-    # Get valid indices
+    # Get the indices of resources studied (adjust for 0-based indexing)
     indices = history["resource_id"].values - 1
     valid_indices = [i for i in indices if 0 <= i < tfidf_matrix.shape[0]]
     
     if not valid_indices:
         return np.zeros((1, tfidf_matrix.shape[1]))
     
+    # Select corresponding rows from TF-IDF matrix
     selected_matrix = tfidf_matrix[valid_indices]
     
-    if selected_matrix.shape[0] == 0:
-        return np.zeros((1, tfidf_matrix.shape[1]))
-    
+    # Compute mean vector
     student_vector = selected_matrix.mean(axis=0)
     student_vector = np.asarray(student_vector).reshape(1, -1)
     
     return student_vector
 
+# -----------------------------
+# Function: Recommend Chapters
+# -----------------------------
 def recommend_resources(student_id, top_n=5):
+    """
+    Recommend chapters most similar to the student's profile.
+    Excludes chapters already studied.
+    """
     student_vector = build_student_profile(student_id)
     similarity = cosine_similarity(student_vector, tfidf_matrix).flatten()
 
@@ -108,7 +123,15 @@ def recommend_resources(student_id, top_n=5):
 
     return recs.sort_values("similarity_score", ascending=False).head(top_n)
 
+# -----------------------------
+# Function: Adaptive Recommendation
+# -----------------------------
 def adaptive_recommendation(student_id):
+    """
+    Filter recommendations based on student progress:
+    - avg_progress >= 80 → Intermediate
+    - otherwise → Beginner
+    """
     history = student_data[student_data["student_id"] == student_id]
     avg_progress = history["progress_percent"].mean() if not history.empty else 0
 
@@ -116,33 +139,32 @@ def adaptive_recommendation(student_id):
 
     recs = recommend_resources(student_id)
     
-    # If no resources match difficulty, return top recommendations anyway
+    # Filter by difficulty level
     filtered_recs = recs[recs["difficulty"] == level]
     if filtered_recs.empty:
-        return recs
+        return recs  # fallback if no chapters match difficulty
     return filtered_recs
 
 # -----------------------------
 # Streamlit UI
 # -----------------------------
 st.sidebar.header("🎓 Student Settings")
-
 student_id = st.sidebar.number_input("Student ID", value=2001)
 show_data = st.sidebar.checkbox("Show Student History")
 
-# Filter student history
+# Show student history filtered by ID
+st.subheader("📈 Student Learning History")
 filtered_history = student_data[student_data["student_id"] == student_id]
-if show_data:
-    st.subheader("📈 Student Learning History")
-    if filtered_history.empty:
-        st.warning(f"No learning history found for Student ID {student_id}.")
-    else:
-        st.dataframe(filtered_history)
+if filtered_history.empty:
+    st.warning(f"No learning history found for Student ID {student_id}.")
+else:
+    st.dataframe(filtered_history)
 
+# Show recommendations
 st.subheader("📚 Recommended Chapters")
 if st.button("Generate Recommendations"):
     final_recs = adaptive_recommendation(student_id)
-
+    
     if final_recs.empty:
         st.warning("No recommendations found. Try adjusting progress or data.")
     else:
