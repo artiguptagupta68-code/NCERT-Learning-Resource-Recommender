@@ -1,176 +1,85 @@
-
+%%writefile app.py
 import streamlit as st
 import pandas as pd
-import numpy as np
-from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.metrics.pairwise import cosine_similarity
+
+st.set_page_config(page_title="NCERT Book Recommender", layout="wide")
+st.title("📚 NCERT Book Recommender")
+st.write("Select your subject, level, and topics to get book recommendations")
 
 # -----------------------------
-# Streamlit page setup
+# Subjects and Topics
 # -----------------------------
-st.set_page_config(page_title="NCERT Learning Recommender", layout="wide")
-st.title("📘 NCERT Learning Resource Recommender")
-st.write("Personalized chapter recommendations for Class 11–12 students")
+subjects_topics = {
+    "Sociology": ["Social Institutions", "Culture and Socialization"],
+    "Polity": ["Indian Constitution", "Fundamental Rights"],
+    "Psychology": ["Human Behaviour", "Learning and Motivation"],
+    "Economics": ["Demand and Supply", "National Income"],
+    "Business Studies": ["Principles of Management", "Marketing Management"]
+}
 
 # -----------------------------
-# Dataset: Chapters/Resources
+# Books dictionary
 # -----------------------------
-resources = pd.DataFrame({
-    "resource_id": [1,2,3,4,5,6,7,8,9,10],
-    "subject": [
-        "Sociology","Sociology",
-        "Polity","Polity",
-        "Psychology","Psychology",
-        "Economics","Economics",
-        "Business Studies","Business Studies"
-    ],
-    "chapter": [
-        "Social Institutions",
-        "Culture and Socialization",
-        "Indian Constitution",
-        "Fundamental Rights",
-        "Human Behaviour",
-        "Learning and Motivation",
-        "Demand and Supply",
-        "National Income",
-        "Principles of Management",
-        "Marketing Management"
-    ],
-    "class": [11,11,11,12,11,12,11,12,11,12],
-    "difficulty": [
-        "Beginner","Intermediate",
-        "Beginner","Intermediate",
-        "Beginner","Intermediate",
-        "Beginner","Intermediate",
-        "Beginner","Intermediate"
-    ],
-    "content": [
-        "family kinship social norms institutions",
-        "culture values socialization identity",
-        "constitution democracy republic justice",
-        "rights equality freedom remedies",
-        "behaviour cognition emotions personality",
-        "learning theories motivation reinforcement",
-        "demand supply market equilibrium",
-        "national income gdp gnp accounting",
-        "management planning organizing controlling",
-        "marketing mix product price promotion"
-    ]
-})
+books = {
+    "Sociology": {
+        "Beginner": ["NCERT Sociology Class 11", "Understanding Society by Haralambos (Intro)"],
+        "Intermediate": ["Introduction to Sociology by Bottomore", "Sociology: Themes and Perspectives by Haralambos"],
+        "Advanced": ["Advanced Sociology by Giddens", "Sociology: Concepts and Theories by Macionis"]
+    },
+    "Polity": {
+        "Beginner": ["NCERT Political Science Class 11", "Indian Constitution Made Easy"],
+        "Intermediate": ["Indian Polity by M. Laxmikanth", "Governance in India by D.D. Basu"],
+        "Advanced": ["Introduction to the Constitution of India by D.D. Basu", "Indian Constitutional Law Advanced"]
+    },
+    "Psychology": {
+        "Beginner": ["NCERT Psychology Class 11", "Psychology Basics by Ciccarelli Intro"],
+        "Intermediate": ["Psychology: An Exploration by Saundra K. Ciccarelli", "Understanding Psychology by Feldman"],
+        "Advanced": ["Advanced Psychology by Baron & Misra", "Handbook of Psychology by Weiner"]
+    },
+    "Economics": {
+        "Beginner": ["NCERT Economics Class 11", "Principles of Economics Intro by Mankiw"],
+        "Intermediate": ["Principles of Economics by N. Gregory Mankiw", "Economic Theory by Samuelson"],
+        "Advanced": ["Advanced Economic Theory by H.L. Ahuja", "Micro and Macro Economics Advanced"]
+    },
+    "Business Studies": {
+        "Beginner": ["NCERT Business Studies Class 11", "Introduction to Management Basics"],
+        "Intermediate": ["Business Studies by Poonam Gandhi", "Business Management Concepts"],
+        "Advanced": ["Advanced Business Management by Robbins", "Strategic Management Advanced"]
+    }
+}
 
 # -----------------------------
-# Dataset: Student Learning History
+# Streamlit sidebar: select options
 # -----------------------------
-student_data = pd.DataFrame({
-    "student_id": [2001, 2001, 2001, 2002, 2002],
-    "resource_id": [1, 3, 7, 2, 4],
-    "rating": [5, 4, 5, 3, 4],
-    "progress_percent": [85, 70, 60, 50, 65]
-})
+st.sidebar.header("🎓 Student Selection")
+selected_subject = st.sidebar.selectbox("Select Subject", list(subjects_topics.keys()))
+selected_level = st.sidebar.selectbox("Select Level", ["Beginner", "Intermediate", "Advanced"])
+selected_topics = st.sidebar.multiselect(
+    "Select Topic(s) you are interested in", subjects_topics[selected_subject]
+)
 
 # -----------------------------
-# NLP: Convert chapter content into vectors
+# Recommend books
 # -----------------------------
-vectorizer = TfidfVectorizer(stop_words="english")
-tfidf_matrix = vectorizer.fit_transform(resources["content"])
-
-# -----------------------------
-# Function: Build Student Profile
-# -----------------------------
-def build_student_profile(student_id):
-    history = student_data[student_data["student_id"] == student_id]
-    
-    if history.empty:
-        # New student → return None to handle separately
-        return None
-    
-    indices = history["resource_id"].values - 1
-    valid_indices = [i for i in indices if 0 <= i < tfidf_matrix.shape[0]]
-    if not valid_indices:
-        return None
-    
-    selected_matrix = tfidf_matrix[valid_indices]
-    student_vector = selected_matrix.mean(axis=0)
-    student_vector = np.asarray(student_vector).reshape(1, -1)
-    return student_vector
-
-
-# -----------------------------
-# Function: Recommend Chapters
-# -----------------------------
-def recommend_resources(student_id, top_n=5):
-    student_vector = build_student_profile(student_id)
-    
-    if student_vector is None:
-        # New student → recommend top beginner chapters
-        recs = resources[resources["difficulty"] == "Beginner"].head(top_n).copy()
-        recs["similarity_score"] = np.nan
-        return recs
-    
-    similarity = cosine_similarity(student_vector, tfidf_matrix).flatten()
-    recs = resources.copy()
-    recs["similarity_score"] = similarity
-
-    studied = student_data[student_data["student_id"] == student_id]["resource_id"]
-    recs = recs[~recs["resource_id"].isin(studied)]
-    
-    return recs.sort_values("similarity_score", ascending=False).head(top_n)
-
-
-# -----------------------------
-# Function: Adaptive Recommendation
-# -----------------------------
-def adaptive_recommendation(student_id):
+def recommend_books(subject, level, topics):
     """
-    Filter recommendations based on student progress:
-    - avg_progress >= 80 → Intermediate
-    - otherwise → Beginner
+    Recommend books based on subject and level.
     """
-    history = student_data[student_data["student_id"] == student_id]
-    avg_progress = history["progress_percent"].mean() if not history.empty else 0
-
-    level = "Intermediate" if avg_progress >= 80 else "Beginner"
-
-    recs = recommend_resources(student_id)
+    if not topics:
+        return pd.DataFrame({"Message": ["Please select at least one topic"]})
     
-    # Filter by difficulty level
-    filtered_recs = recs[recs["difficulty"] == level]
-    if filtered_recs.empty:
-        return recs  # fallback if no chapters match difficulty
-    return filtered_recs
+    recommended = books.get(subject, {}).get(level, [])
+    # Show topics as info
+    data = {"Topics": [", ".join(topics)], "Recommended Books": [", ".join(recommended)]}
+    return pd.DataFrame(data)
 
 # -----------------------------
-# Streamlit UI
+# Show recommendation button
 # -----------------------------
-st.sidebar.header("🎓 Student Settings")
-student_id = st.sidebar.number_input("Student ID", value=2001)
-show_data = st.sidebar.checkbox("Show Student History")
-
-# Show student history filtered by ID
-st.subheader("📈 Student Learning History")
-filtered_history = student_data[student_data["student_id"] == student_id]
-if filtered_history.empty:
-    st.warning(f"No learning history found for Student ID {student_id}.")
-else:
-    st.dataframe(filtered_history)
-
-# Show recommendations
-st.subheader("📚 Recommended Chapters")
-if st.button("Generate Recommendations"):
-    final_recs = adaptive_recommendation(student_id)
-    
-    if final_recs.empty:
-        st.warning("No recommendations found. Try adjusting progress or data.")
-    else:
-        st.dataframe(
-            final_recs[[
-                "subject",
-                "chapter",
-                "class",
-                "difficulty",
-                "similarity_score"
-            ]].reset_index(drop=True)
-        )
+if st.button("Get Book Recommendations"):
+    recommendations = recommend_books(selected_subject, selected_level, selected_topics)
+    st.subheader("📖 Recommended Books")
+    st.dataframe(recommendations)
 
 st.markdown("---")
-st.caption("Built using Python, NLP (TF-IDF), and Recommendation Systems")
+st.caption("Book recommendations based on subject, level, and topics")
