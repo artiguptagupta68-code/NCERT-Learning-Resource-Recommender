@@ -99,7 +99,6 @@ def build_student_profile(student_id):
     student_vector = np.asarray(student_vector).reshape(1, -1)
     
     return student_vector
-r
 
 
 
