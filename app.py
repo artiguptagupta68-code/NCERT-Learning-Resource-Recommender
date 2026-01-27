@@ -135,7 +135,9 @@ show_data = st.sidebar.checkbox("Show Student History")
 
 if show_data:
     st.subheader("📈 Student Learning History")
-    st.dataframe(student_data)
+    filtered_history = student_data[student_data["student_id"] == student_id]
+    st.dataframe(filtered_history)
+
 
 st.subheader("📚 Recommended Chapters")
 
